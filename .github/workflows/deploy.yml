@@ -29,3 +29,28 @@ jobs:
         push: true
         # 아래 형식: 도커허브ID/이미지이름:태그
         tags: ${{ secrets.DOCKER_USERNAME }}/platform-study:latest
+
+  deploy:
+    needs: build-and-push  # 중요: 위 단계(빌드)가 성공해야만 실행됨
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_PRIVATE_KEY }}
+          script: |
+            # 1. 도커 허브에서 최신 이미지 가져오기
+            sudo docker pull ${{ secrets.DOCKER_USERNAME }}/platform-study:latest
+
+            # 2. 기존에 돌아가던 서버가 있으면 끄고 삭제하기 (에러 무시)
+            sudo docker stop my-server || true
+            sudo docker rm my-server || true
+
+            # 3. 새 이미지로 서버 실행하기 (포트 80으로 연결)
+            sudo docker run -d --name my-server -p 80:80 ${{ secrets.DOCKER_USERNAME }}/platform-study:latest
+            
+            # 4. 필요 없는 구버전 이미지 싹 청소하기
+            sudo docker image prune -f
